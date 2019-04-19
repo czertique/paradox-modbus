@@ -3,13 +3,11 @@
         "enabled": true,
         "wait": true
     },
-    "prt3":
-    {
+    "prt3": {
         "port": "/dev/ttyUSB0",
         "speed": 57600
     },
-    "panel":
-    {
+    "panel": {
         "type": "EVOHD",
         "areas": [
             [1,4]
@@ -20,5 +18,15 @@
         "users": [
             [1,10]
         ]
+    },
+    "queue": {
+        "host": "localhost",
+        "port": 1883,
+        "queues": {
+            "events": "myhome/paradox/events",
+            "requests": "myhome/paradox/requests",
+            "responses": "myhome/paradox/responses",
+            "broadcasts": "myhome/paradox/broadcasts"
+        }
     }
 }

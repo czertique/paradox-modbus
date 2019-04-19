@@ -31,6 +31,18 @@ class PRT_Zone:
     def __init__(self, id):
         self.id = id
 
+    def getData(self):
+        return {
+            "id": self.id,
+            "name": self.name,
+            "open": self.open,
+            "tamper": self.tamper,
+            "fire": self.fire,
+            "alarm": self.alarm,
+            "fire_alarm": self.fire_alarm,
+            "supervision_lost": self.supervision_lost,
+            "low_battery": self.low_battery
+        }
 
 class PRT_User:
     id = None
@@ -38,3 +50,9 @@ class PRT_User:
 
     def __init__(self, id):
         self.id = id
+
+    def getData(self):
+        return {
+            "id": self.id,
+            "name": self.name
+        }

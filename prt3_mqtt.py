@@ -7,7 +7,9 @@ import json
 import signal
 from paradox.prt3 import PRT
 from common.config import get_config
-from paradox.objects import *
+# from paradox.objects import *
+from q.client import Client
+#from types import SimpleNamespace
 
 # Global constants
 logger_name = 'prt3_mqtt'
@@ -31,7 +33,41 @@ def exit_gracefully(sig, frame):
     global can_exit
     log.info("Caught ^C; exitting")
     can_exit = True
-signal.signal(signal.SIGINT, exit_gracefully)        
+signal.signal(signal.SIGINT, exit_gracefully)   
+
+def process_request(client_id, request_id, request):
+    #ret = SimpleNamespace(
+     #     clientid = client_id,
+      #    reqid = request_id
+       # )
+    #ret = lambda: None
+    #ret.clientid = client_id
+    #ret.reqid = request_id
+    ret = {
+        "clientid": client_id,
+        "reqid": request_id
+    }
+    return ret
+
+def mqtt_callback(userdata, msg):
+    try:
+        payload = json.loads(msg.payload)
+
+        client_id = payload["clientid"]
+        request_id = payload["reqid"]
+
+        for request in payload["request"]:
+            req_type = request["type"]
+            ret = process_request(client_id, request_id, request)
+            queue.send_response(client_id, request_id, json.dumps(ret))
+
+            log.info("Received MQTT request [topic = %s; client_id = %s; request_id = %s]: %s" % (msg.topic, client_id, request_id, req_type))
+
+    except:
+        log.warning("Invalid MQTT request received: %s" % (msg.payload))
+
+def prt3_event_callback(event):
+    queue.send_event(json.dumps(event))
 
 # Read config file
 try:
@@ -51,8 +87,8 @@ if get_config(config, "debug.enabled"):
         log.debug("Waiting for debugger to attach")
         ptvsd.wait_for_attach()
 
-# prt = PRT(get_config(config, "panel"))
-prt = PRT(config)
+queue = Client(config, mqtt_callback)
+prt = PRT(config, prt3_event_callback)
 
 while (not can_exit):
     prt.loop()

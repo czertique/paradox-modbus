@@ -22,6 +22,7 @@ class PRT:
     _sum_users = 0
     _ser = None
     _log = None
+    _event_callback = None
 
     def input_serial(self, buf, regex_response = None):
         self._buffer = self._buffer + buf
@@ -35,6 +36,189 @@ class PRT:
                     ret.append(event_ret)
             self._buffer = command[-1]
         return ret
+
+    def process_zone_event(self, group, event, area):
+        # Zone OK
+        if group == 0:
+            self._log.info("Zone OK: %d / %d" % (event, area))
+            self.zones[event-1].open = False
+            self.zones[event-1].tamper = False
+            self.zones[event-1].fire = False
+
+        # Zone open
+        if group == 1:
+            self._log.info("Zone open: %d / %d" % (event, area))
+            self.zones[event-1].open = True
+
+        # Zone in tamper
+        if group == 2:
+            self._log.info("Zone in tamper: %d / %d" % (event, area))
+            self.zones[event-1].tamper = True
+
+        # Zone in fire loop trouble
+        if group == 3:
+            self._log.info("Zone in fire loop trouble: %d / %d" % (event, area))
+            self.zones[event-1].fire = True
+
+        # Zone status queue notification
+        if (self._event_callback) and (0 <= group <= 3):
+            event = {
+                "type": "zone",
+                "event": {
+                    0: "ok",
+                    1: "open",
+                    2: "tamper",
+                    3: "fire_loop_trouble",
+                }[group],
+                "area": area,
+                "data": self.zones[event-1].getData(),
+            }
+            self._event_callback(event)
+  
+    def process_nonreportable_event(self, group, event, area):
+        if event == 0:
+            self._event_callback({"type": "tlm_trouble", "area": area})
+                    
+        if event == 1:
+            self._event_callback({"type": "smoke_detector_reset", "area": area})
+
+        if event == 2:
+            self._event_callback({"type": "arm_nodelay", "area": area})
+
+        if event == 3:
+            self._event_callback({"type": "arm_in_stay", "area": area})
+
+        if event == 4:
+            self._event_callback({"type": "arm_in_away", "area": area})
+
+        if event == 5:
+            self._event_callback({"type": "fullarm_in_stay", "area": area})
+
+        if event == 6:
+            self._event_callback({"type": "voice_access", "area": area})
+
+        if event == 7:
+            self._event_callback({"type": "remote_access", "area": area})
+
+        if event == 8:
+            self._event_callback({"type": "pc_comm_fail", "area": area})
+
+        if event == 9:
+            self._event_callback({"type": "midnight", "area": area})
+
+        if event == 10:
+            self._event_callback({"type": "ip_user_login", "area": area})
+
+        if event == 11:
+            self._event_callback({"type": "ip_user_logout", "area": area})
+
+        if event == 12:
+            self._event_callback({"type": "user_callup", "area": area})
+
+        if event == 13:
+            self._event_callback({"type": "force_answer", "area": area})
+
+        if event == 14:
+            self._event_callback({"type": "force_hangup", "area": area})
+
+    def process_useraccess(self, group, event, area):
+        if group == 5:
+            self._event_callback({
+                "type": "keypad_usercode_entered",
+                "area": area,
+                "user": self.users[event-1].getData()
+                })
+        
+        if group == 6:
+            self._event_callback({
+                "type": "door_access",
+                "area": area,
+                "door": event
+            })
+
+        if group == 7:
+            self._event_callback({
+                "type": "bypass_programming_access",
+                "area": area,
+                "user": event
+            })
+
+    def process_delayzonealarm(self, group, event, area):
+            self._event_callback({
+                "type": "tx_delay_zone_alarm",
+                "area": area,
+                "zone": event
+            })
+
+    def process_arming(self, group, event, area):
+        # Arm with master code / user code
+        if (9 <= group <= 10):
+            self._event_callback({
+                "type": "arm",
+                "source": {
+                    9: "mastercode",
+                    10: "usercode"
+                }[group],
+                "area": area,
+                "user": event
+            })
+        
+        # Arm with keyswitch
+        if group == 11:
+            self._event_callback({
+                "type": "arm",
+                "source": "keyswitch",
+                "area": area,
+                "keyswitch": event
+            })
+
+        # Special arming
+        if group == 12:
+            self._event_callback({
+                "type": "arm",
+                "source": "keyswitch",
+                "area": area,
+                "keyswitch": event
+            })
+
+    def process_disarming(self, group, event, area):
+        # Disarm with master code / user code
+        if (13 <= group <= 14) or (16 <= group <= 17) or (19 <= group <= 20):
+            self._event_callback({
+                "type": "disarm",
+                "state": {
+                    13: "ok",
+                    14: "ok",
+                    16: "after_alarm",
+                    17: "after_alarm",
+                    19: "during_alarm",
+                    20: "during_alarm"
+                }[group],
+                "source": {
+                    13: "mastercode",
+                    14: "usercode",
+                    16: "mastercode",
+                    17: "usercode",
+                    19: "mastercode",
+                    20: "usercode"
+                }[group],
+                "area": area,
+                "user": event
+            })
+        
+        # Disarm with keyswitch
+        if (group == 15) or (group == 18) or (group == 21):
+            self._event_callback({
+                "type": "disarm",
+                "state": {
+                    15: "ok",
+                    18: "after_alarm",
+                    21: "during_alarm",
+                }[group],
+                "source": "keyswitch",
+                "area": area,
+                "keyswitch": event
+            })
 
     def parse_event(self, str, regex_response = None):
         self._log.debug("Parsing: %s" % (str))
@@ -52,23 +236,28 @@ class PRT:
                 cmd_area = int(rx[3])
                 self._log.debug("Match [EVENT] gr=%d en=%d ar=%d" % (cmd_group, cmd_event, cmd_area))
 
-                if cmd_group == 0:
-                    self._log.info("Zone OK: %d / %d" % (cmd_event, cmd_area))
-                    self.zones[cmd_event].open = False
-                    self.zones[cmd_event].tamper = False
-                    self.zones[cmd_event].fire = False
+                # Zone events
+                if (0 <= cmd_group <= 3):
+                    self.process_zone_event(cmd_group, cmd_event, cmd_area)
 
-                if cmd_group == 1:
-                    self._log.info("Zone open: %d / %d" % (cmd_event, cmd_area))
-                    self.zones[cmd_event].open = True
+                # Non-reportable events
+                if cmd_group == 4:
+                    self.process_nonreportable_event(cmd_group, cmd_event, cmd_area)
+                
+                # User code entered on keypad
+                if (5 <= cmd_group <= 7):
+                    self.process_useraccess(cmd_group, cmd_event, cmd_area)
 
-                if cmd_group == 2:
-                    self._log.info("Zone in tamper: %d / %d" % (cmd_event, cmd_area))
-                    self.zones[cmd_event].tamper = True
+                # TX Delay Zone Alarm
+                if cmd_group == 8:
+                    self.process_delayzonealarm(cmd_group, cmd_event, cmd_area)
 
-                if cmd_group == 3:
-                    self._log.info("Zone in fire loop trouble: %d / %d" % (cmd_event, cmd_area))
-                    self.zones[cmd_event].fire = True
+                if (9 <= cmd_group <= 11):
+                    self.process_arming(cmd_group, cmd_event, cmd_area)
+
+                if (13 <= cmd_group <= 21):
+                    self.process_disarming(cmd_group, cmd_event, cmd_area)
+
             return None
 
         else:
@@ -165,9 +354,10 @@ class PRT:
             if user != None:
                 self.fetch_user(user.id)
 
-    def __init__(self, config):
+    def __init__(self, config, event_callback):
         self._log = logging.getLogger(logger_name)
         self._config = config
+        self._event_callback = event_callback
         
         # Open serial port
         try:
