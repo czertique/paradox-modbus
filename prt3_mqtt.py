@@ -10,6 +10,7 @@ from common.config import get_config
 # from paradox.objects import *
 from q.client import Client
 #from types import SimpleNamespace
+# import datetime
 
 # Global constants
 logger_name = 'prt3_mqtt'
@@ -18,6 +19,7 @@ config_filename = 'config.json'
 # Global variables
 config = None
 can_exit = False
+last_sync = None
 
 # Set up logger
 log = logging.getLogger(logger_name)
@@ -35,20 +37,16 @@ def exit_gracefully(sig, frame):
     can_exit = True
 signal.signal(signal.SIGINT, exit_gracefully)   
 
+# Process MQTT request
 def process_request(client_id, request_id, request):
-    #ret = SimpleNamespace(
-     #     clientid = client_id,
-      #    reqid = request_id
-       # )
-    #ret = lambda: None
-    #ret.clientid = client_id
-    #ret.reqid = request_id
     ret = {
         "clientid": client_id,
         "reqid": request_id
     }
+    # ret.huhuhu = "hahaha"
     return ret
 
+# MQTT callback (process request via PRT3)
 def mqtt_callback(userdata, msg):
     try:
         payload = json.loads(msg.payload)
@@ -66,6 +64,7 @@ def mqtt_callback(userdata, msg):
     except:
         log.warning("Invalid MQTT request received: %s" % (msg.payload))
 
+# PRT3 event callback (send message to MQTT)
 def prt3_event_callback(event):
     queue.send_event(json.dumps(event))
 
@@ -77,6 +76,24 @@ except:
     type, value, traceback = sys.exc_info()
     log.error("Unable to read configuration: %s" % (value))
 
+# Set loglevel
+loglevel_string = get_config(config, "debug.loglevel").upper()
+try:
+    loglevel = {
+        "DEBUG": logging.DEBUG,
+        "INFO": logging.INFO,
+        "WARNING": logging.WARNING,
+        "ERROR": logging.ERROR,
+        "CRITICAL": logging.CRITICAL
+    }[loglevel_string]
+    log.info("Setting loglevel: %s" % (loglevel_string))
+except:
+    log.info("Invalid logging level configured; setting INFO")
+    loglevel = logging.INFO
+
+log.setLevel(loglevel)
+handler.setLevel(loglevel)
+
 # Start debugging interface if enabled
 # Wait for debugger if enabled
 if get_config(config, "debug.enabled"):
@@ -87,10 +104,17 @@ if get_config(config, "debug.enabled"):
         log.debug("Waiting for debugger to attach")
         ptvsd.wait_for_attach()
 
+# Init MQTT queue and set callback
 queue = Client(config, mqtt_callback)
+
+# Init PRT3 processor and set callback
 prt = PRT(config, prt3_event_callback)
 
+# Main loop
 while (not can_exit):
+    if (last_sync == None) or ((time.time() - last_sync) >= 10):
+        prt.panel_sync()
+        last_sync = time.time()
     prt.loop()
 
 prt.close()

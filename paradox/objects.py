@@ -13,6 +13,9 @@ class PRT_Area:
     in_alarm = None
     strobe = None
 
+    last_state_update = None
+    last_name_update = None
+
     def __init__(self, id):
         self.id = id
 
@@ -27,6 +30,9 @@ class PRT_Zone:
     fire_alarm = None
     supervision_lost = None
     low_battery = None
+
+    last_state_update = None
+    last_name_update = None
 
     def __init__(self, id):
         self.id = id
@@ -47,6 +53,8 @@ class PRT_Zone:
 class PRT_User:
     id = None
     name = None
+
+    last_name_update = None
 
     def __init__(self, id):
         self.id = id

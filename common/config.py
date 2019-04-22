@@ -18,3 +18,15 @@ def get_config(config, path):
         sys.exit(1)
     else:
         return ret
+
+def get_config_default(config, path, defval = None):
+    try:
+        _path = path.split(".")
+        ret = config
+        for i in _path:
+            ret = ret[i]
+    except:
+        log.warning("Unable to get configuration option: %s" % (path))
+        return defval
+    else:
+        return ret

@@ -1,6 +1,7 @@
 import logging
 import sys
 import serial
+import io
 import re
 import time
 from common.config import get_config
@@ -13,7 +14,7 @@ logger_name = 'prt3_mqtt'
 class PRT:
     areas = [None]*8
     zones = [None]*192
-    users = [None]*999
+    users = [None]*1000
     _config = None
     _buffer = ""
     _panel_type = None
@@ -21,6 +22,7 @@ class PRT:
     _sum_zones = 0
     _sum_users = 0
     _ser = None
+    _serial = None
     _log = None
     _event_callback = None
 
@@ -40,28 +42,62 @@ class PRT:
     def process_zone_event(self, group, event, area):
         # Zone OK
         if group == 0:
-            self._log.info("Zone OK: %d / %d" % (event, area))
+            self._log.info("Zone OK: %d/%d [%s / %s]" % (area, event, self.areas[area-1].name, self.zones[event-1].name))
             self.zones[event-1].open = False
             self.zones[event-1].tamper = False
             self.zones[event-1].fire = False
+            self.zones[event-1].last_state_update = time.time()
 
         # Zone open
         if group == 1:
-            self._log.info("Zone open: %d / %d" % (event, area))
+            self._log.info("Zone open: %d/%d [%s / %s]" % (area, event, self.areas[area-1].name, self.zones[event-1].name))
             self.zones[event-1].open = True
+            self.zones[event-1].last_state_update = time.time()
 
         # Zone in tamper
         if group == 2:
-            self._log.info("Zone in tamper: %d / %d" % (event, area))
+            self._log.info("Zone in tamper: %d/%d [%s / %s]" % (area, event, self.areas[area-1].name, self.zones[event-1].name))
             self.zones[event-1].tamper = True
+            self.zones[event-1].last_state_update = time.time()
 
         # Zone in fire loop trouble
         if group == 3:
-            self._log.info("Zone in fire loop trouble: %d / %d" % (event, area))
+            self._log.info("Zone in fire loop trouble: %d/%d [%s / %s]" % (area, event, self.areas[area-1].name, self.zones[event-1].name))
             self.zones[event-1].fire = True
+            self.zones[event-1].last_state_update = time.time()
+
+        if group == 23:
+            self._log.info("Zone bypassed: %d/%d [%s / %s]" % (area, event, self.areas[area-1].name, self.zones[event-1].name))
+
+        if group == 24:
+            self._log.info("Zone in alarm: %d/%d [%s / %s]" % (area, event, self.areas[area-1].name, self.zones[event-1].name))
+            self.zones[event-1].alarm = True
+
+        if group == 25:
+            self._log.info("Zone in fire alarm: %d/%d [%s / %s]" % (area, event, self.areas[area-1].name, self.zones[event-1].name))
+            self.zones[event-1].fire_alarm = True
+
+        if group == 26:
+            self._log.info("Zone alarm restore: %d/%d [%s / %s]" % (area, event, self.areas[area-1].name, self.zones[event-1].name))
+            self.zones[event-1].alarm = False
+
+        if group == 27:
+            self._log.info("Zone fire alarm restore: %d/%d [%s / %s]" % (area, event, self.areas[area-1].name, self.zones[event-1].name))
+            self.zones[event-1].fire_alarm = False
+
+        if group == 32:
+            self._log.info("Zone shutdown: %d/%d [%s / %s]" % (area, event, self.areas[area-1].name, self.zones[event-1].name))
+
+        if group == 33:
+            self._log.info("Zone tamper: %d/%d [%s / %s]" % (area, event, self.areas[area-1].name, self.zones[event-1].name))
+            self.zones[event-1].tamper = True
+
+        if group == 34:
+            self._log.info("Zone tamper restore: %d/%d [%s / %s]" % (area, event, self.areas[area-1].name, self.zones[event-1].name))
+            self.zones[event-1].tamper = False
 
         # Zone status queue notification
-        if (self._event_callback) and (0 <= group <= 3):
+        if (self._event_callback) and ((0 <= group <= 3) or (23 <= group <= 27) or (32 <= group <= 34)):
             event = {
                 "type": "zone",
                 "event": {
@@ -69,6 +105,14 @@ class PRT:
                     1: "open",
                     2: "tamper",
                     3: "fire_loop_trouble",
+                    23: "bypassed",
+                    24: "alarm",
+                    25: "fire_alarm",
+                    26: "alarm_restore",
+                    27: "fire_alarm_restore",
+                    32: "shutdown",
+                    33: "tamper",
+                    34: "tamper_restore"
                 }[group],
                 "area": area,
                 "data": self.zones[event-1].getData(),
@@ -126,7 +170,7 @@ class PRT:
             self._event_callback({
                 "type": "keypad_usercode_entered",
                 "area": area,
-                "user": self.users[event-1].getData()
+                "user": self.users[event].getData()
                 })
         
         if group == 6:
@@ -176,9 +220,19 @@ class PRT:
         if group == 12:
             self._event_callback({
                 "type": "arm",
-                "source": "keyswitch",
+                "source": "special",
                 "area": area,
-                "keyswitch": event
+                "event": {
+                    0: "auto",
+                    1: "winload",
+                    2: "late_to_close",
+                    3: "no_movement",
+                    4: "partial",
+                    5: "onetouch",
+                    6: "_future_",
+                    7: "_future_",
+                    8: "invoice_module"
+                }[event]
             })
 
     def process_disarming(self, group, event, area):
@@ -220,6 +274,119 @@ class PRT:
                 "keyswitch": event
             })
 
+        # Special disarming
+        if group == 22:
+            self._event_callback({
+                "type": "disarm",
+                "source": "special",
+                "area": area,
+                "event": {
+                    0: "auto_cancelled",
+                    1: "onetouch_instant",
+                    2: "winload",
+                    3: "winload_afteralarm",
+                    4: "winload_cancelledalarm",
+                    5: "_future_",
+                    6: "_future_",
+                    7: "_future_",
+                    8: "invoice_module"
+                }[event]
+            })
+
+    def process_status_event(self, group, event, area):
+        if group == 64:
+            self._event_callback({
+                "type": "status",
+                "event": {
+                    0: "arm",
+                    1: "arm",
+                    2: "arm",
+                    3: "arm",
+                    4: "alarm",
+                    5: "alarm",
+                    6: "alarm",
+                    7: "alarm"
+                }[event],
+                "kind": {
+                    0: "normal",
+                    1: "force",
+                    2: "stay",
+                    3: "instance",
+                    4: "strobe",
+                    5: "silent",
+                    6: "audible",
+                    7: "fire"
+                }[event],
+                "area": area
+            })
+
+        if group == 65:
+            self._event_callback({
+                "type": "status",
+                "event": {
+                    0: "ready",
+                    1: "exit_delay",
+                    2: "entry_delay",
+                    3: "system_trouble",
+                    4: "alarm_in_memory",
+                    5: "zones_bypassed",
+                    6: "bypass_master_installer_programming",
+                    7: "keypad_lockout"
+                }[event],
+                "area": area
+            })
+
+        if group == 66:
+            self._event_callback({
+                "type": "status",
+                "event": {
+                    0: "intellizone_delay_enganged",
+                    1: "fire_delay_enganged",
+                    2: "auto_arm",
+                    3: "voice_arm",
+                    4: "tamper",
+                    5: "zone_low_battery",
+                    6: "fire_loop_trouble",
+                    7: "zone_supervision_trouble"
+                }[event],
+                "area": area
+            })
+
+    def process_trouble_event(self, group, event, area):
+        self._event_callback({
+            "type": "trouble",
+            "event": {
+                36: "trouble",
+                37: "restore"
+            }[group],
+            "source": {
+                0: "tlm",
+                1: "ac_failure",
+                2: "battery_failure",
+                3: "aux_current_limit",
+                4: "bell_current_limit",
+                5: "bell_absent",
+                6: "clock",
+                7: "global_fire_loop",
+                8: "panel_tamper"
+            }[event],
+            "area": area
+        })
+
+    def process_unknown_event(self, str):
+        self._log.info("Unknown event command: %s" % (str))
+        self._event_callback({
+            "type": "unknown_event",
+            "data": str
+        })
+
+    def process_unknown_command(self, str):
+        self._log.info("Unknown command: %s" % (str))
+        self._event_callback({
+            "type": "unknown_command",
+            "data": str
+        })
+
     def parse_event(self, str, regex_response = None):
         self._log.debug("Parsing: %s" % (str))
         regex_event = "^G([0-9]{3})N([0-9]{3})A([0-9]{3})$"
@@ -237,31 +404,40 @@ class PRT:
                 self._log.debug("Match [EVENT] gr=%d en=%d ar=%d" % (cmd_group, cmd_event, cmd_area))
 
                 # Zone events
-                if (0 <= cmd_group <= 3):
+                if (0 <= cmd_group <= 3) or (23 <= cmd_group <= 27):
                     self.process_zone_event(cmd_group, cmd_event, cmd_area)
 
                 # Non-reportable events
-                if cmd_group == 4:
+                elif cmd_group == 4:
                     self.process_nonreportable_event(cmd_group, cmd_event, cmd_area)
                 
                 # User code entered on keypad
-                if (5 <= cmd_group <= 7):
+                elif (5 <= cmd_group <= 7):
                     self.process_useraccess(cmd_group, cmd_event, cmd_area)
 
                 # TX Delay Zone Alarm
-                if cmd_group == 8:
+                elif cmd_group == 8:
                     self.process_delayzonealarm(cmd_group, cmd_event, cmd_area)
 
-                if (9 <= cmd_group <= 11):
+                elif (9 <= cmd_group <= 12):
                     self.process_arming(cmd_group, cmd_event, cmd_area)
 
-                if (13 <= cmd_group <= 21):
+                elif (13 <= cmd_group <= 22):
                     self.process_disarming(cmd_group, cmd_event, cmd_area)
+
+                elif (36 <= cmd_group <= 37):
+                    self.process_trouble_event(cmd_group, cmd_event, cmd_area)
+
+                elif (64 <= cmd_group <= 66):
+                    self.process_status_event(cmd_group, cmd_event, cmd_area)
+
+                else:
+                    self.process_unknown_event(str)
 
             return None
 
         else:
-            self._log.debug("Unknown command: %s" % (str))
+            self.process_unknown_command(str)
             return None
 
     def wait_response(self, regex):
@@ -269,7 +445,9 @@ class PRT:
         counter = 0
         while (counter < 10) and (ret == None):
             counter += 1
+            self._ser.timeout = 0.05
             serin = self._ser.readline()
+            self._ser.timeout = 0.1
             if (serin != ''):
                 ret = self.input_serial(serin, regex)
                 if ret != None:
@@ -280,18 +458,23 @@ class PRT:
     def prt3_command(self, cmd, regex):
         self._log.debug("Sending command: %s" % (cmd))
         self._ser.write(cmd + "\r")
+        # self._ser.write(unicode(cmd + "\r"))
+        # self._ser.flush()
         self._log.debug("Sent; waiting for response")
         ret = self.wait_response(regex)
         return ret
     
     def fetch_area(self, id):
         self._log.debug("Fetching area [%d]" % (id))
+        name_update = get_config(self._config, "prt3.refresh.names") * 60
 
         # Request area label
-        ret = self.prt3_command("AL%03d" % (id), "^(AL)([0-9]{3})(.{16})$")
-        for area in ret:
-            if area[1] == "AL":
-                self.areas[id-1].name = area[3]
+        if (self.areas[id-1].last_name_update == None) or ((time.time() - self.areas[id-1].last_name_update) >= name_update):
+            ret = self.prt3_command("AL%03d" % (id), "^(AL)([0-9]{3})(.{16})$")
+            for area in ret:
+                if area[1] == "AL":
+                    self.areas[id-1].name = area[3].strip()
+                    self.areas[id-1].last_name_update = time.time()
 
         # Request area status
         ret = self.prt3_command("RA%03d" % (id), "^(RA)([0-9]{3})([DAFSI])([MO])([TO])([NO])([PO])([AO])([SO])$")
@@ -308,15 +491,19 @@ class PRT:
                 self.areas[id-1].in_programming = (area[7] == 'P')
                 self.areas[id-1].in_alarm = (area[8] == 'A')
                 self.areas[id-1].strobe = (area[9] == 'S')
+                self.areas[id-1].last_state_update = time.time()
     
     def fetch_zone(self, id):
         self._log.debug("Fetching zone [%d]" % (id))
+        name_update = get_config(self._config, "prt3.refresh.names") * 60
 
         # Request zone label
-        ret = self.prt3_command("ZL%03d" % (id), "^(ZL)([0-9]{3})(.{16})$")
-        for zone in ret:
-            if zone[1] == "ZL":
-                self.zones[id-1].name = zone[3]
+        if (self.zones[id-1].last_name_update == None) or ((time.time() - self.zones[id-1].last_name_update) >= name_update):
+            ret = self.prt3_command("ZL%03d" % (id), "^(ZL)([0-9]{3})(.{16})$")
+            for zone in ret:
+                if zone[1] == "ZL":
+                    self.zones[id-1].name = zone[3].strip()
+                    self.zones[id-1].last_name_update = time.time()
 
         # Request zone status
         ret = self.prt3_command("RZ%03d" % (id), "^(RZ)([0-9]{3})([COTF])([AO])([FO])([SO])([LO])$")
@@ -329,29 +516,37 @@ class PRT:
                 self.zones[id-1].fire_alarm = (zone[5] == 'F')
                 self.zones[id-1].supervision_lost = (zone[6] == 'S')
                 self.zones[id-1].low_battery = (zone[7] == 'L')
-    
+                self.zones[id-1].last_state_update = time.time()
+
     def fetch_user(self, id):
         self._log.debug("Fetching user [%d]" % (id))
+
+        self.users[0].name = "Master Technician"
 
         # Request user label
         ret = self.prt3_command("UL%03d" % (id), "^(UL)([0-9]{3})(.{16})$")
         for user in ret:
             if user[1] == "UL":
-                self.users[id-1].name = user[3]
+                self.users[id].name = user[3].strip()
+                self.users[id].last_name_update = time.time()
 
     def panel_sync(self):
-        self._log.info("Fetching panel status")
+        self._log.debug("Panel sync poll")
+        area_update = get_config(self._config, "prt3.refresh.area") * 60
+        zone_update = get_config(self._config, "prt3.refresh.zone") * 60
+        user_update = get_config(self._config, "prt3.refresh.user") * 60
+        # name_update = get_config(self._config, "prt3.refresh.names")
 
         for area in self.areas:
-            if area != None:
+            if (area != None) and ( (area.last_state_update == None) or (time.time() - area.last_state_update >= area_update) ):
                 self.fetch_area(area.id)
 
         for zone in self.zones:
-            if zone != None:
+            if (zone != None) and ( (zone.last_state_update == None) or (time.time() - zone.last_state_update >= zone_update) ):
                 self.fetch_zone(zone.id)
 
         for user in self.users:
-            if user != None:
+            if (user != None) and (user.id != 0) and ( (user.last_name_update == None) or (time.time() - user.last_name_update >= user_update) ):
                 self.fetch_user(user.id)
 
     def __init__(self, config, event_callback):
@@ -369,7 +564,8 @@ class PRT:
 
         self._log.info("Opening serial port %s" % (serial_port))
         self._ser = serial.Serial(port=serial_port, baudrate=serial_speed, parity=serial.PARITY_NONE, stopbits=serial.STOPBITS_ONE, 
-                    bytesize=serial.EIGHTBITS, timeout=0.5, xonxoff=False, rtscts=False, dsrdtr=False)
+                    bytesize=serial.EIGHTBITS, timeout=0.1, xonxoff=False, rtscts=False, dsrdtr=False)
+        # self._ser = io.TextIOWrapper(io.BufferedRWPair(self._serial, self._serial), None, None, '\r')
 
         # Load panel configuration
         cfg_panel = get_config(self._config, "panel")
@@ -391,9 +587,10 @@ class PRT:
                     self._sum_zones += 1
 
             # Load monitored user ranges
+            self.users[0] = PRT_User(0)
             for i in cfg_panel["users"]:
                 for i2 in range(i[0], i[1]+1):
-                    self.users[i2-1] = PRT_User(i2)
+                    self.users[i2] = PRT_User(i2)
                     self._sum_users += 1
 
         except:
@@ -404,7 +601,7 @@ class PRT:
         self._log.debug("* Areas = %d; Zones = %d; Users = %d" % (self._sum_areas, self._sum_zones, self._sum_users))
 
         # Sync current panel status
-        self.panel_sync()
+        # self.panel_sync()
     
     def close(self):
         # Close serial port before quitting

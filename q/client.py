@@ -1,6 +1,6 @@
 import logging
 import sys
-from common.config import get_config
+from common.config import get_config, get_config_default
 import paho.mqtt.client as mqtt
 
 logger_name = 'prt3_mqtt'
@@ -45,6 +45,21 @@ class Client:
         self._client.on_connect = self._on_connect
         self._client.on_message = self._on_message
 
+        tls_enabled = False
+        if (get_config_default(config, "queue.tls", False)):
+            tls_enabled = get_config_default(config, "queue.tls.enabled", False)
+            tls_capath = get_config_default(config, "queue.tls.capath", None)
+            tls_cert = get_config(config, "queue.tls.cert")
+            tls_key = get_config(config, "queue.tls.key")
+            tls_insecure = get_config_default(config, "queue.tls.disableHostnameCheck", False)
+        else:
+            self._log.warning("TLS not configured, not using encryption")
+        
+        if tls_enabled:
+            self._client.tls_set(ca_certs = tls_capath, certfile = tls_cert, keyfile = tls_key)
+            if tls_insecure:
+                self._client.tls_insecure_set(True)
+        
         self._log.info("Initializing MQTT client")
         self._client.connect_async(get_config(self._config, "queue.host"), get_config(self._config, "queue.port"))
 
