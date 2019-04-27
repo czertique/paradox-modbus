@@ -12,16 +12,19 @@ class Client:
     _msg_callback = None
 
     def _on_connect(self, client, userdata, flags, rc):
-        self._log.info("Connected to queue with result code "+str(rc))
-        client.subscribe(get_config(self._config, "queue.queues.requests"))
+        self._log.info("Connected to queue with result code %d" % (rc))
+        req_topic = get_config(self._config, "queue.queues.requests") + "/#"
+        self._log.info("Subscribing to topic: %s" % (req_topic))
+        client.subscribe(req_topic)
 
     def _on_message(self, client, userdata, msg):
         if self._msg_callback:
             self._msg_callback(userdata, msg)
 
-    def send_event(self, payload):
+    def send_event(self, payload, topic = None):
         try:
-            self._client.publish(get_config(self._config, "queue.queues.events"), payload)
+            qtopic = get_config(self._config, "queue.queues.events") + (("/" + topic) if topic else "")
+            self._client.publish(qtopic, payload)
         except:
             self._log.error("Unable to send MQTT event")
 

@@ -71,8 +71,8 @@ def mqtt_callback(userdata, msg):
         log.warning("Invalid MQTT request received: %s" % (msg.payload))
 
 # PRT3 event callback (send message to MQTT)
-def prt3_event_callback(event):
-    queue.send_event(json.dumps(event))
+def prt3_event_callback(event, topic = None):
+    queue.send_event(json.dumps(event), topic)
 
 # Read config file
 try:
