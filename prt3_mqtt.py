@@ -5,6 +5,7 @@ import sys
 import time
 import json
 import signal
+import argparse
 from paradox.prt3 import PRT
 from common.config import get_config
 # from paradox.objects import *
@@ -20,6 +21,11 @@ config_filename = 'config.json'
 config = None
 can_exit = False
 last_sync = None
+
+# Parse arguments
+parser = argparse.ArgumentParser(description='Paradox PRT3 to MQTT interface')
+parser.add_argument('-d', '--debug', help='Enable debugging (set loglevel + start ptvsd), use twice to wait for debugger to attach (-dd)', action='count')
+args = parser.parse_args()
 
 # Set up logger
 log = logging.getLogger(logger_name)
@@ -72,6 +78,12 @@ def prt3_event_callback(event):
 try:
     with open (config_filename, "r") as config_file:
         config = json.loads(config_file.read())
+
+        if (args.debug):
+            config["debug"]["loglevel"] = "debug"
+            config["debug"]["enabled"] = True
+            if (args.debug >= 2):
+                config["debug"]["wait"] = True
 except:
     type, value, traceback = sys.exc_info()
     log.error("Unable to read configuration: %s" % (value))
