@@ -17,7 +17,7 @@ cat << EOF | mosquitto_pub -d --insecure --cafile ${CA} --cert ${CERT} --key ${K
             "type": "arm",
             "quickarm": [
                 {
-                    "area": 1,
+                    "area": ${1:-1},
                     "arm_type": "regular"
                 }
             ]

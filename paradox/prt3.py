@@ -15,6 +15,7 @@ class PRT:
     areas = [None]*8
     zones = [None]*192
     users = [None]*1000
+    pgm = [None]*30
     _config = None
     _buffer = ""
     _panel_type = None
@@ -614,6 +615,18 @@ class PRT:
         self._log.info("System status event; type = %s, event = %s, kind = %s, area = %s" % (payload["type"], payload["event"], payload["kind"], payload["area"]))
         self._event_callback(payload, "status")
 
+    def process_vpgm_event(self, pgm, state):
+        payload = {
+            "id": pgm,
+            "state": {
+                "ON": True,
+                "OFF": False
+            }[state]
+        }
+        self.pgm[pgm-1].state = payload["state"]
+
+        self._log.info("Virtual PGM event: %s / %s" % (pgm, state))
+        self._event_callback(payload, "pgm/"+str(pgm))
 
     def process_unknown_event(self, str):
         self._log.warn("Unknown event command: %s" % (str))
@@ -631,11 +644,22 @@ class PRT:
 
     def parse_event(self, str, regex_response = None):
         self._log.debug("Parsing: %s" % (str))
+        regex_comm = "^COMM&(ok|fail)$"
         regex_event = "^G([0-9]{3})N([0-9]{3})A([0-9]{3})$"
+        regex_pgm = "^PGM([0-9]{2})(ON|OFF)$"
 
         if (regex_response != None) and (re.search(regex_response, str)):
             rx = re.split(regex_response, str)
             return rx
+
+        elif (re.search(regex_comm, str)):
+            rx = re.split(regex_event, str)
+            if rx:
+                comm_state = rx[1]
+                if (comm_state == "ok"):
+                    self._log.info("PRT3 Communication OK")
+                else:
+                    self._log.error("PRT3 Communication FAILED")
 
         elif (re.search(regex_event, str)):
             rx = re.split(regex_event, str)
@@ -710,6 +734,13 @@ class PRT:
                     self.process_unknown_event(str)
 
             return None
+
+        elif (re.search(regex_pgm, str)):
+            rx = re.split(regex_pgm, str)
+            if rx:
+                cmd_pgm = int(rx[1])
+                cmd_state = rx[2]
+                self.process_vpgm_event(cmd_pgm, cmd_state)
 
         else:
             self.process_unknown_command(str)
@@ -877,6 +908,10 @@ class PRT:
         except:
             self._log.error("Unable to parse panel config")
             sys.exit(1)
+
+        # Init PGMs
+        for i in range(1,30):
+            self.pgm[i-1] = PRT_PGM(i)
         
         self._log.debug("Panel object successfully initialized")
         self._log.debug("* Areas = %d; Zones = %d; Users = %d" % (self._sum_areas, self._sum_zones, self._sum_users))

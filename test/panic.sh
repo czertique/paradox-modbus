@@ -8,7 +8,7 @@ CA=/etc/mosquitto/ca_certificates/cacert.pem
 CERT=/etc/mosquitto/certs/panel1.crt
 KEY=/etc/mosquitto/certs/panel1.key
 TOPIC=myhome/paradox/requests/${CLIENT_ID}/panic
-PANIC_TYPE=emergency
+PANIC_TYPE=${1:-emergency}
 
 #if [ -z "$1" ]; then
 #    PANIC_TYPE=${1}

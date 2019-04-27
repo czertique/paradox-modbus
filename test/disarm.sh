@@ -18,7 +18,7 @@ cat << EOF | mosquitto_pub -d --insecure --cafile ${CA} --cert ${CERT} --key ${K
             "code": "${CODE}",
             "disarm": [
                 {
-                    "area": 1
+                    "area": ${1:-1}
                 }
             ]
         }

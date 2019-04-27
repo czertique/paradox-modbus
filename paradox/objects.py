@@ -64,3 +64,17 @@ class PRT_User:
             "id": self.id,
             "name": self.name
         }
+
+class PRT_PGM:
+    id = None
+    state = None
+    
+    last_status_update = None
+
+    def __init__(self, id):
+        self.id = id
+
+    def getData(self):
+        return {
+            "id": self.id
+        }

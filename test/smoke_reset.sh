@@ -15,7 +15,7 @@ cat << EOF | mosquitto_pub -d --insecure --cafile ${CA} --cert ${CERT} --key ${K
     "reqid": "${REQ_ID}",
     "request": [
         {
-            "area": 1
+            "area": ${1:-1}
         }
     ]
 }

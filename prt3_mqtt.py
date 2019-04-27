@@ -107,7 +107,7 @@ def process_arming_request(request):
             log.info("Processing quick arm request: %s" % (cmd))
             prt_response = prt.prt3_command(cmd, regex)
             response = {
-                "arm": {
+                "quickarm": {
                     "area": req_area,
                     "result": prt_response
                 }
@@ -121,7 +121,7 @@ def process_arming_request(request):
             log.info("Processing disarm request: %s" % (cmd))
             prt_response = prt.prt3_command(cmd, regex)
             response = {
-                "arm": {
+                "disarm": {
                     "area": req_area,
                     "result": prt_response
                 }
@@ -147,10 +147,8 @@ def process_panic_request(request):
         log.info("Processing panic request: %s" % (cmd))
         prt_response = prt.prt3_command(cmd, regex)
         response = {
-            "arm": {
                 "area": req_area,
                 "result": prt_response
-            }
         }
 
     return response
@@ -168,10 +166,8 @@ def process_smoke_reset_request(request):
         log.info("Processing smoke reset request: %s" % (cmd))
         prt_response = prt.prt3_command(cmd, regex)
         response = {
-            "arm": {
                 "area": req_area,
                 "result": prt_response
-            }
         }
 
     return response
@@ -189,10 +185,31 @@ def process_utility_key_request(request):
         log.info("Processing utility key request: %s" % (cmd))
         prt_response = prt.prt3_command(cmd, regex)
         response = {
-            "arm": {
                 "id": req_id,
                 "result": prt_response
-            }
+        }
+
+    return response
+
+def process_virtual_input_request(request):
+    global prt
+
+    response = None
+    
+    if ("id" in request) and ("state" in request):
+        req_id = request["id"]
+        req_state = {
+                True: "O",
+                False: "C"
+            }[request["state"]]
+
+        cmd = str("V%s%03d" % (req_state, req_id))
+        regex = "^"+cmd[:5]+"&(ok|fail)$"
+        log.info("Processing virtual input request: %s" % (cmd))
+        prt_response = prt.prt3_command(cmd, regex)
+        response = {
+                "id": req_id,
+                "result": prt_response
         }
 
     return response
@@ -242,6 +259,12 @@ def mqtt_callback(userdata, msg):
                     ret["client_id"] = client_id
                     ret["request_id"] = request_id
                     response_topic = topic_user + "/utilitykey"
+
+                elif topic_operation == "vinput":
+                    ret = process_virtual_input_request(request)
+                    ret["client_id"] = client_id
+                    ret["request_id"] = request_id
+                    response_topic = topic_user + "/vinput"
 
                 if ret:
                     queue.send_response(json.dumps(ret), response_topic)
