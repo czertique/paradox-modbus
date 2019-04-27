@@ -4,9 +4,14 @@
         "enabled": false,
         "wait": false
     },
+    "modbus": {
+        "listen_addr": "0.0.0.0",
+        "port": 502
+    },
     "queue": {
         "host": "localhost",
         "port": 1883,
+        "client_name": "modbus",
         "queues": {
             "events": "myhome/paradox/events",
             "requests": "myhome/paradox/requests",
