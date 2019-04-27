@@ -1,0 +1,11 @@
+[Unit]
+Description=Paradox-modbus PRT3 module
+Requires=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/prt3_mqtt.py
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
