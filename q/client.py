@@ -28,15 +28,16 @@ class Client:
         except:
             self._log.error("Unable to send MQTT event")
 
-    def send_broadcast(self, payload):
+    def send_broadcast(self, payload, topic = None):
         try:
             self._client.publish(get_config(self._config, "queue.queues.broadcasts"), payload)
         except:
             self._log.error("Unable to send MQTT broadcast")
 
-    def send_response(self, client_id, request_id, payload):
+    def send_response(self, payload, topic = None):
         try:
-            self._client.publish(get_config(self._config, "queue.queues.responses"), payload)
+            _topic = get_config(self._config, "queue.queues.responses") + (("/" + topic) if topic else "")
+            self._client.publish(_topic, payload)
         except:
             self._log.error("Unable to send MQTT response")
 
@@ -70,4 +71,5 @@ class Client:
         self._client.loop_start()
 
     def close(self):
+        self._log.info("Disconnecting from message broker")
         self._client.disconnect()

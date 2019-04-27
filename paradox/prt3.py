@@ -488,7 +488,7 @@ class PRT:
             "area": area
         }
 
-        self._log.info("Utility key event; utility_key = %s, area = %s" % (payload["event"], payload["area"]))
+        self._log.info("Utility key event; utility_key = %s, area = %s" % (payload["utility_key"], payload["area"]))
         self._event_callback(payload, "utility_key")
 
     def process_door_event(self, group, event, area):
@@ -616,14 +616,14 @@ class PRT:
 
 
     def process_unknown_event(self, str):
-        self._log.info("Unknown event command: %s" % (str))
+        self._log.warn("Unknown event command: %s" % (str))
         self._event_callback({
             "type": "unknown_event",
             "data": str
         }, "unknown")
 
     def process_unknown_command(self, str):
-        self._log.info("Unknown command: %s" % (str))
+        self._log.warn("Unknown command: %s" % (str))
         self._event_callback({
             "type": "unknown_command",
             "data": str
