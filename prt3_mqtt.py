@@ -14,7 +14,6 @@ from threading import Lock
 
 # Global constants
 logger_name = 'prt3_mqtt'
-config_filename = 'config.json'
 
 # Global variables
 config = None
@@ -26,6 +25,7 @@ serial_lock = Lock()
 # Parse arguments
 parser = argparse.ArgumentParser(description='Paradox PRT3 to MQTT interface')
 parser.add_argument('-d', '--debug', help='Enable debugging (set loglevel + start ptvsd), use twice to wait for debugger to attach (-dd)', action='count')
+parser.add_argument('-c', '--config', help='Config file', action='store', default="/usr/local/etc/paradox-modbus/config.json")
 args = parser.parse_args()
 
 # Set up logger
@@ -281,6 +281,7 @@ def prt3_event_callback(event, topic = None):
     queue.send_event(json.dumps(event), topic)
 
 # Read config file
+config_filename = args.config
 try:
     with open (config_filename, "r") as config_file:
         config = json.loads(config_file.read())
