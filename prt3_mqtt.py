@@ -8,8 +8,8 @@ import signal
 import argparse
 import re
 from paradox.prt3 import PRT
+from paradox.queue_client import Client
 from common.config import get_config
-from q.client import Client
 from threading import Lock
 
 # Global constants
@@ -25,7 +25,7 @@ serial_lock = Lock()
 # Parse arguments
 parser = argparse.ArgumentParser(description='Paradox PRT3 to MQTT interface')
 parser.add_argument('-d', '--debug', help='Enable debugging (set loglevel + start ptvsd), use twice to wait for debugger to attach (-dd)', action='count')
-parser.add_argument('-c', '--config', help='Config file', action='store', default="/usr/local/etc/paradox-modbus/config.json")
+parser.add_argument('-c', '--config', help='Config file', action='store', default="/usr/local/etc/paradox-modbus/config_prt3.json")
 args = parser.parse_args()
 
 # Set up logger

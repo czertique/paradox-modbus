@@ -1,0 +1,24 @@
+{
+    "debug": {
+        "loglevel": "info",
+        "enabled": false,
+        "wait": false
+    },
+    "queue": {
+        "host": "localhost",
+        "port": 1883,
+        "queues": {
+            "events": "myhome/paradox/events",
+            "requests": "myhome/paradox/requests",
+            "responses": "myhome/paradox/responses",
+            "broadcasts": "myhome/paradox/broadcasts"
+        },
+        "tls": {
+            "enabled": true,
+            "capath": "/etc/ssl/certs/ca-certificates.crt",
+            "cert": "/etc/mosquitto/certs/modbus.crt",
+            "key": "/etc/mosquitto/certs/modbus.key",
+            "disableHostnameCheck": true
+        }
+    }
+}
