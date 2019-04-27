@@ -6,7 +6,7 @@ CODE=1234
 CA=/etc/mosquitto/ca_certificates/cacert.pem
 CERT=/etc/mosquitto/certs/panel1.crt
 KEY=/etc/mosquitto/certs/panel1.key
-TOPIC=myhome/paradox/requests/arm
+TOPIC=myhome/paradox/requests/${CLIENT_ID}/arming
 
 cat << EOF | mosquitto_pub -d --insecure --cafile ${CA} --cert ${CERT} --key ${KEY} -t ${TOPIC} -s
 {
@@ -14,8 +14,13 @@ cat << EOF | mosquitto_pub -d --insecure --cafile ${CA} --cert ${CERT} --key ${K
     "reqid": "${REQ_ID}",
     "request": [
         {
-            "type": "arm",
-            "code": "${CODE}"
+            "type": "disarm",
+            "code": "${CODE}",
+            "disarm": [
+                {
+                    "area": 1
+                }
+            ]
         }
     ]
 }

@@ -1,6 +1,6 @@
 #!/usr/bin/env sh
 
-CONFIG="config.json"
+CONFIG="../config.json"
 TOPIC="myhome/paradox/#"
 
 mosquitto_sub -d --insecure --cafile $(jq -r '.queue.tls.capath' ${CONFIG}) --cert $(jq -r '.queue.tls.cert' ${CONFIG}) --key $(jq -r '.queue.tls.key' ${CONFIG}) -t ${TOPIC}
