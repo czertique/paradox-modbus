@@ -1,7 +1,7 @@
 {
     "debug": {
         "loglevel": "info",
-        "enabled": true,
+        "enabled": false,
         "wait": false
     },
     "prt3": {
