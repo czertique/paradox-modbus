@@ -6,6 +6,7 @@ import re
 import time
 from common.config import get_config
 from paradox.objects import *
+from threading import Lock
 
 logger_name = 'prt3_mqtt'
 
@@ -26,6 +27,7 @@ class PRT:
     _serial = None
     _log = None
     _event_callback = None
+    _serial_lock = None
 
     def input_serial(self, buf, regex_response = None):
         self._buffer = self._buffer + buf
@@ -772,10 +774,12 @@ class PRT:
         return None
     
     def prt3_command(self, cmd, regex):
+        self._serial_lock.acquire()
         self._log.debug("Sending command: %s" % (cmd))
         self._ser.write(cmd + "\r")
         self._log.debug("Sent; waiting for response")
         ret = self.wait_response(regex)
+        self._serial_lock.release()
         return ret
     
     def fetch_area(self, id):
@@ -866,7 +870,10 @@ class PRT:
         self._log = logging.getLogger(logger_name)
         self._config = config
         self._event_callback = event_callback
+        self._serial_lock = Lock()
         
+        self._serial_lock.acquire()
+
         # Open serial port
         try:
             serial_port = get_config(self._config, "prt3.port")
@@ -915,6 +922,9 @@ class PRT:
         
         self._log.debug("Panel object successfully initialized")
         self._log.debug("* Areas = %d; Zones = %d; Users = %d" % (self._sum_areas, self._sum_zones, self._sum_users))
+        
+        self._serial_lock.release()
+
 
     def close(self):
         # Close serial port before quitting
@@ -922,7 +932,9 @@ class PRT:
         self._ser.close()
 
     def loop(self):
+        self._serial_lock.acquire()
         serin = self.serial_readline()
+        self._serial_lock.release()
         if (serin != ''):
             self.input_serial(serin)
 

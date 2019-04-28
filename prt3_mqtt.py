@@ -10,7 +10,7 @@ import re
 from paradox.prt3 import PRT
 from paradox.queue_client import Client
 from common.config import get_config
-from threading import Lock
+# from threading import Lock
 
 # Global constants
 logger_name = 'prt3_mqtt'
@@ -19,8 +19,6 @@ logger_name = 'prt3_mqtt'
 config = None
 can_exit = False
 last_sync = None
-
-serial_lock = Lock()
 
 # Parse arguments
 parser = argparse.ArgumentParser(description='Paradox PRT3 to MQTT interface')
@@ -216,9 +214,8 @@ def process_virtual_input_request(request):
 
 # MQTT callback (process request via PRT3)
 def mqtt_callback(userdata, msg):
-    serial_lock.acquire()
-
     try:
+        log.info("mqtt_callback() parsing payload")
         payload = json.loads(msg.payload)
 
         client_id = payload["clientid"]
@@ -274,7 +271,6 @@ def mqtt_callback(userdata, msg):
     except:
         log.warn("Invalid MQTT request received: %s" % (msg.payload))
 
-    serial_lock.release()
 
 # PRT3 event callback (send message to MQTT)
 def prt3_event_callback(event, topic = None):
@@ -331,12 +327,10 @@ prt = PRT(config, prt3_event_callback)
 
 # Main loop
 while (not can_exit):
-    serial_lock.acquire()
     if (last_sync == None) or ((time.time() - last_sync) >= 10):
         prt.panel_sync()
         last_sync = time.time()
     prt.loop()
-    serial_lock.release()
 
 queue.close()
 prt.close()
