@@ -82,7 +82,7 @@ def process_arming_request(request):
                 }[req_armtype],
                 req_code))
             regex = "^"+cmd[:5]+"&(ok|fail)$"
-            log.info("Processing arm request: %s" % (cmd))
+            log.info("Processing arm request: %s****" % (cmd[:5]))
             prt_response = prt.prt3_command(cmd, regex)
             response = {
                 "arm": {
@@ -116,7 +116,7 @@ def process_arming_request(request):
             req_area = req["area"]
             cmd = str("AD%03d%s" % (req_area, req_code))
             regex = "^"+cmd[:5]+"&(ok|fail)$"
-            log.info("Processing disarm request: %s" % (cmd))
+            log.info("Processing disarm request: %s****" % (cmd[:5]))
             prt_response = prt.prt3_command(cmd, regex)
             response = {
                 "disarm": {
