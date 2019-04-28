@@ -27,7 +27,8 @@ class Modbus:
         self._modbus_callback = modbus_callback
 
         self.store = ModbusSlaveContext(
-           di = ModbusSequentialDataBlock(1, [0]*192)
+           di = ModbusSequentialDataBlock(1, [0]*384)
+           # di = ModbusSequentialDataBlock(1, [0]*192)
         )
 
         self.context = ModbusServerContext(slaves=self.store, single=True)
@@ -60,12 +61,17 @@ class Modbus:
                 zone_open = event_data["data"]["open"]
                 zone_tamper = event_data["data"]["tamper"]
 
+                addr_spacing = 192
                 modbus_open_addr = zone_number-1
+                modbus_tamper_addr = modbus_open_addr + addr_spacing
+                modbus_alarm_addr = modbus_tamper_addr + addr_spacing
+                modbus_lowbatt_addr = modbus_alarm_addr + addr_spacing
 
                 self._log.info("Processing zone %d event" % (zone_number))
 
                 fx = 0x02
                 ctx.setValues(fx, modbus_open_addr, [zone_open*1])
+                ctx.setValues(fx, modbus_tamper_addr, [zone_tamper*1])
             except:
                 self._log.error("Unable to parse zone event: %s" % (event_data))
 

@@ -34,23 +34,6 @@ formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(messag
 handler.setFormatter(formatter)
 log.addHandler(handler)
 
-# Install event handler for SIGINT to allow program to exit gracefully
-#def exit_gracefully(sig, frame):
-#    global can_exit
-#    global queue
-#    global modbus
-#    if (not can_exit):
-#        log.info("Caught ^C; exitting")
-#        can_exit = True
-#    else:
-#        log.info("Caught second ^C; force exitting")
-#        if 'queue' in globals():
-#            queue.close()
-#        if 'modbus' in globals():
-#            modbus.close()
-#        exit(0)
-# signal.signal(signal.SIGINT, exit_gracefully)   
-
 # Read config file
 config_filename = args.config
 try:
